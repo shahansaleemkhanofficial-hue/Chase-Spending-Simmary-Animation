@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chase Donut Chart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  }
+  .container {
+    position: relative;
+    width: 520px;
+    height: 520px;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+  }
+  .center {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .label {
+    font-weight: 400;
+    font-size: 20px;
+    color: #333333;
+    margin-bottom: 10px;
+    letter-spacing: 0.01em;
+  }
+  .amount {
+    font-weight: 300;
+    font-size: 52px;
+    color: #1a1a1a;
+    margin-bottom: 18px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .link {
+    font-weight: 700;
+    font-size: 18px;
+    color: #1565c0;
+    letter-spacing: 0.01em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <canvas id="c" width="520" height="520"></canvas>
+  <div class="center">
+    <div class="label">Total Spending</div>
+    <div class="amount" id="amt">$0.00</div>
+    <div class="link">See Transactions ›</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const amtEl = document.getElementById('amt');
+
+const cx = 260, cy = 260;
+const outerR = 210, innerR = 152;
+const FINAL = 174428.56;
+const GAP = 2;
+const RING_START = 135;
+const TOTAL_ARC = 330;
+const SEG_WEIGHTS = [18,14,16,18,15,17,14,16,18,20,12,14,16,18,14,16,15,16];
+const totalW = SEG_WEIGHTS.reduce((a,b) => a+b, 0);
+const totalGapDeg = (SEG_WEIGHTS.length - 1) * GAP;
+const availArc = TOTAL_ARC - totalGapDeg;
+
+let segments = [];
+let cur = RING_START;
+for (let i = 0; i < SEG_WEIGHTS.length; i++) {
+  const arc = (SEG_WEIGHTS[i] / totalW) * availArc;
+  segments.push({ start: cur, end: cur + arc });
+  cur += arc + GAP;
+}
+
+function toRad(deg) { return (deg - 90) * Math.PI / 180; }
+
+function drawSegment(start, end) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, outerR, toRad(start), toRad(end), false);
+  ctx.arc(cx, cy, innerR, toRad(end), toRad(start), true);
+  ctx.closePath();
+  ctx.fillStyle = '#a8c4dc';
+  ctx.fill();
+}
+
+function easeInOut(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2; }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+function fmt(v) {
+  const s = v.toFixed(2).split('.');
+  s[0] = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return '$' + s[0] + '.' + s[1];
+}
+
+const DURATION = 2500;
+const startTime = performance.now();
+
+function frame(now) {
+  const elapsed = now - startTime;
+  const rawT = Math.min(elapsed / DURATION, 1);
+  const t = easeInOut(rawT);
+
+  ctx.clearRect(0, 0, 520, 520);
+
+  const revealedArc = t * TOTAL_ARC;
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const segStartRel = seg.start - RING_START;
+    if (revealedArc <= segStartRel) continue;
+    const visEnd = Math.min(seg.end, RING_START + revealedArc);
+    if (visEnd <= seg.start) continue;
+    drawSegment(seg.start, visEnd);
+  }
+
+  amtEl.textContent = fmt(easeOut(rawT) * FINAL);
+
+  if (rawT < 1) {
+    requestAnimationFrame(frame);
+  } else {
+    amtEl.textContent = fmt(FINAL);
+  }
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
